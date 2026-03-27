@@ -10,8 +10,7 @@ hiddenimports = (
     + collect_submodules("sounddevice")
 )
 
-# IMPORTANT:
-# Put libvosk.dylib inside _internal/vosk/, not just _internal/
+# Put libvosk.dylib under _internal/vosk/
 binaries = collect_dynamic_libs("vosk", destdir="vosk")
 
 datas = [
