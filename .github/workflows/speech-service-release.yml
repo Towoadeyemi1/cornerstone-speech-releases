@@ -34,7 +34,7 @@ jobs:
           7z x model.zip
           del model.zip
 
-      - name: Build executable from spec
+      - name: Build application from spec
         working-directory: speech-service/service
         run: |
           pyinstaller server.spec
@@ -108,6 +108,163 @@ jobs:
           mkdir -p dmg-root/CornerstoneSpeechService
           cp -R CornerstoneSpeechService/_internal dmg-root/CornerstoneSpeechService/
           cp -R CornerstoneSpeechService/CornerstoneSpeechService dmg-root/CornerstoneSpeechService/
+          if [ -d "CornerstoneSpeechService/_CodeSignature" ]; then
+            cp -R CornerstoneSpeechService/_CodeSignature dmg-root/CornerstoneSpeechService/
+          fi
+
+      - name: Create DMG
+        working-directory: speech-service/service/dist
+        run: |
+          hdiutil create -volname "CornerstoneSpeechService" \
+            -srcfolder "dmg-root" \
+            -ov -format UDZO \
+            "CornerstoneSpeechService.dmg"
+
+      - name: Create macOS zip
+        working-directory: speech-service/service/dist
+        run: |
+          ditto -c -k --sequesterRsrc --keepParent "CornerstoneSpeechService" "CornerstoneSpeechService-macOS.zip"
+
+      - name: Upload macOS artifact
+        uses: actions/upload-artifact@v6
+        with:
+          name: macos-build
+          path: |
+            speech-service/service/dist/CornerstoneSpeechService.dmg
+            speech-service/service/dist/CornerstoneSpeechService-macOS.zip
+
+  release:
+    needs:
+      - build-windows
+      - build-macos
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v7
+        with:
+          path: artifacts
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            artifacts/windows-build/*
+            artifacts/macos-build/*
+          generate_release_notes: truename: Build Speech Service Installers
+
+on:
+  push:
+    tags:
+      - "speech-v*"
+  workflow_dispatch:
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        working-directory: speech-service/service
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller
+
+      - name: Download Vosk model
+        working-directory: speech-service/service
+        run: |
+          curl -L -o model.zip "https://alphacephei.com/vosk/models/vosk-model-small-en-us-0.15.zip"
+          7z x model.zip
+          del model.zip
+
+      - name: Build application from spec
+        working-directory: speech-service/service
+        run: |
+          pyinstaller server.spec
+
+      - name: Create installer with NSIS
+        uses: joncloud/makensis-action@v4
+        with:
+          script-file: speech-service/installer/windows.nsi
+          arguments: "/V3"
+        continue-on-error: true
+
+      - name: Zip portable version
+        working-directory: speech-service/service/dist
+        run: |
+          Compress-Archive -Path CornerstoneSpeechService -DestinationPath CornerstoneSpeechService-Windows.zip -Force
+
+      - name: Upload Windows artifact
+        uses: actions/upload-artifact@v6
+        with:
+          name: windows-build
+          path: |
+            speech-service/service/dist/CornerstoneSpeechService-Windows.zip
+            speech-service/service/dist/*.exe
+
+  build-macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        working-directory: speech-service/service
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller
+
+      - name: Download Vosk model
+        working-directory: speech-service/service
+        run: |
+          curl -L -o model.zip "https://alphacephei.com/vosk/models/vosk-model-small-en-us-0.15.zip"
+          unzip -o model.zip
+          rm model.zip
+
+      - name: Build application from spec
+        working-directory: speech-service/service
+        run: |
+          pyinstaller server.spec
+
+      - name: List build output
+        working-directory: speech-service/service/dist
+        run: |
+          ls -la
+          ls -la CornerstoneSpeechService || true
+          ls -la CornerstoneSpeechService/_internal || true
+          ls -la CornerstoneSpeechService/_internal/vosk || true
+
+      - name: Ad-hoc sign macOS build
+        working-directory: speech-service/service/dist
+        run: |
+          codesign --force --deep --sign - "CornerstoneSpeechService" || true
+
+      - name: Prepare DMG contents
+        working-directory: speech-service/service/dist
+        run: |
+          rm -rf dmg-root
+          mkdir -p dmg-root/CornerstoneSpeechService
+          cp -R CornerstoneSpeechService/_internal dmg-root/CornerstoneSpeechService/
+          cp -R CornerstoneSpeechService/CornerstoneSpeechService dmg-root/CornerstoneSpeechService/
+          if [ -d "CornerstoneSpeechService/_CodeSignature" ]; then
+            cp -R CornerstoneSpeechService/_CodeSignature dmg-root/CornerstoneSpeechService/
+          fi
 
       - name: Create DMG
         working-directory: speech-service/service/dist
