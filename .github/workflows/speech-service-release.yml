@@ -6,7 +6,6 @@ on:
       - 'speech-v*'
   workflow_dispatch:
 
-# Optional: opt into Node 24 for JS-based actions now (helps future-proof)
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 
@@ -83,21 +82,31 @@ jobs:
           unzip -o model.zip
           rm model.zip
 
-      # IMPORTANT FIX:
-      # When using a .spec file, DO NOT pass makespec/CLI options like --onedir, --name, --collect-binaries, etc.
-      # Put those settings inside server.spec and call pyinstaller with only the spec file.
       - name: Build application (from spec)
         working-directory: speech-service/service
         run: |
           pyinstaller server.spec
 
-      - name: Create DMG
+      - name: Create DMG (robust: .app OR folder)
         working-directory: speech-service/service/dist
         run: |
+          echo "=== dist contents ==="
+          ls -la
+
+          if [ -d "CornerstoneSpeechService.app" ]; then
+            SRC="CornerstoneSpeechService.app"
+          elif [ -d "CornerstoneSpeechService" ]; then
+            SRC="CornerstoneSpeechService"
+          else
+            echo "ERROR: No CornerstoneSpeechService output found in dist/"
+            exit 1
+          fi
+
+          echo "Creating DMG from: $SRC"
           hdiutil create -volname "CornerstoneSpeechService" \
-            -srcfolder CornerstoneSpeechService.app \
+            -srcfolder "$SRC" \
             -ov -format UDZO \
-            CornerstoneSpeechService.dmg
+            "CornerstoneSpeechService.dmg"
 
       - name: Upload macOS artifact
         uses: actions/upload-artifact@v6
