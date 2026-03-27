@@ -1,4 +1,5 @@
 # -*- mode: python ; coding: utf-8 -*-
+
 from PyInstaller.utils.hooks import collect_dynamic_libs, collect_submodules
 
 block_cipher = None
@@ -9,8 +10,10 @@ hiddenimports = (
     + collect_submodules("sounddevice")
 )
 
+# Critical for macOS: bundle libvosk.dylib
 binaries = collect_dynamic_libs("vosk")
 
+# Bundle the downloaded Vosk model folder into the app
 datas = [
     ("vosk-model-small-en-us-0.15", "model"),
 ]
@@ -22,12 +25,10 @@ a = Analysis(
     datas=datas,
     hiddenimports=hiddenimports,
     hookspath=[],
+    hooksconfig={},
     runtime_hooks=[],
     excludes=[],
-    win_no_prefer_redirects=False,
-    win_private_assemblies=False,
     cipher=block_cipher,
-    noarchive=False,
 )
 
 pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
