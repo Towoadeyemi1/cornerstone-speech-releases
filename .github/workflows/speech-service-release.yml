@@ -6,6 +6,10 @@ on:
       - 'speech-v*'
   workflow_dispatch:
 
+# Optional: opt into Node 24 for JS-based actions now (helps future-proof)
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
 jobs:
   build-windows:
     runs-on: windows-latest
@@ -31,17 +35,10 @@ jobs:
           7z x model.zip
           del model.zip
 
-      - name: Build executable
+      - name: Build executable (from spec)
         working-directory: speech-service/service
         run: |
-          pyinstaller --onedir --noconsole `
-            --name "CornerstoneSpeechService" `
-            --add-data "vosk-model-small-en-us-0.15;model" `
-            --collect-binaries vosk `
-            --collect-submodules vosk `
-            --collect-submodules websockets `
-            --collect-submodules sounddevice `
-            server.py
+          pyinstaller server.spec
 
       - name: Create installer with NSIS
         uses: joncloud/makensis-action@v4
@@ -55,7 +52,7 @@ jobs:
         run: Compress-Archive -Path CornerstoneSpeechService -DestinationPath CornerstoneSpeechService-Windows.zip
 
       - name: Upload Windows artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: windows-build
           path: |
@@ -86,18 +83,13 @@ jobs:
           unzip -o model.zip
           rm model.zip
 
-      - name: Build application
+      # IMPORTANT FIX:
+      # When using a .spec file, DO NOT pass makespec/CLI options like --onedir, --name, --collect-binaries, etc.
+      # Put those settings inside server.spec and call pyinstaller with only the spec file.
+      - name: Build application (from spec)
         working-directory: speech-service/service
         run: |
-          pyinstaller --onedir --windowed \
-            --name "CornerstoneSpeechService" \
-            --add-data "vosk-model-small-en-us-0.15:model" \
-            --collect-binaries vosk \
-            --collect-submodules vosk \
-            --collect-submodules websockets \
-            --collect-submodules sounddevice \
-            --osx-bundle-identifier "com.cornerstone.speechservice" \
-            server.spec
+          pyinstaller server.spec
 
       - name: Create DMG
         working-directory: speech-service/service/dist
@@ -108,7 +100,7 @@ jobs:
             CornerstoneSpeechService.dmg
 
       - name: Upload macOS artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: macos-build
           path: speech-service/service/dist/CornerstoneSpeechService.dmg
@@ -121,12 +113,12 @@ jobs:
       contents: write
     steps:
       - name: Download all artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           path: artifacts
 
       - name: Create Release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           files: |
             artifacts/windows-build/*
