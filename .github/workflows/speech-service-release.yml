@@ -88,32 +88,47 @@ jobs:
         run: |
           pyinstaller server.spec
 
+      - name: List build output
+        working-directory: speech-service/service/dist
+        run: |
+          ls -la
+          ls -la CornerstoneSpeechService || true
+          ls -la CornerstoneSpeechService/_internal || true
+          ls -la CornerstoneSpeechService/_internal/vosk || true
+
+      - name: Ad-hoc sign macOS build
+        working-directory: speech-service/service/dist
+        run: |
+          codesign --force --deep --sign - "CornerstoneSpeechService" || true
+
+      - name: Prepare DMG contents
+        working-directory: speech-service/service/dist
+        run: |
+          rm -rf dmg-root
+          mkdir -p dmg-root/CornerstoneSpeechService
+          cp -R CornerstoneSpeechService/_internal dmg-root/CornerstoneSpeechService/
+          cp -R CornerstoneSpeechService/CornerstoneSpeechService dmg-root/CornerstoneSpeechService/
+
       - name: Create DMG
         working-directory: speech-service/service/dist
         run: |
-          echo "=== dist contents ==="
-          ls -la
-
-          if [ -d "CornerstoneSpeechService.app" ]; then
-            SRC="CornerstoneSpeechService.app"
-          elif [ -d "CornerstoneSpeechService" ]; then
-            SRC="CornerstoneSpeechService"
-          else
-            echo "ERROR: No CornerstoneSpeechService output found in dist/"
-            exit 1
-          fi
-
-          echo "Creating DMG from: $SRC"
           hdiutil create -volname "CornerstoneSpeechService" \
-            -srcfolder "$SRC" \
+            -srcfolder "dmg-root" \
             -ov -format UDZO \
             "CornerstoneSpeechService.dmg"
+
+      - name: Create macOS zip
+        working-directory: speech-service/service/dist
+        run: |
+          ditto -c -k --sequesterRsrc --keepParent "CornerstoneSpeechService" "CornerstoneSpeechService-macOS.zip"
 
       - name: Upload macOS artifact
         uses: actions/upload-artifact@v6
         with:
           name: macos-build
-          path: speech-service/service/dist/CornerstoneSpeechService.dmg
+          path: |
+            speech-service/service/dist/CornerstoneSpeechService.dmg
+            speech-service/service/dist/CornerstoneSpeechService-macOS.zip
 
   release:
     needs:
