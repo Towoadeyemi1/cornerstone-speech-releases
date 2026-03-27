@@ -48,7 +48,8 @@ jobs:
 
       - name: Zip portable version
         working-directory: speech-service/service/dist
-        run: Compress-Archive -Path CornerstoneSpeechService -DestinationPath CornerstoneSpeechService-Windows.zip
+        run: |
+          Compress-Archive -Path CornerstoneSpeechService -DestinationPath CornerstoneSpeechService-Windows.zip -Force
 
       - name: Upload Windows artifact
         uses: actions/upload-artifact@v6
