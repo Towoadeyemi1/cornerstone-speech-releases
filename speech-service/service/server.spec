@@ -10,10 +10,10 @@ hiddenimports = (
     + collect_submodules("sounddevice")
 )
 
-# Critical for macOS: bundle libvosk.dylib
-binaries = collect_dynamic_libs("vosk")
+# IMPORTANT:
+# Put libvosk.dylib inside _internal/vosk/, not just _internal/
+binaries = collect_dynamic_libs("vosk", destdir="vosk")
 
-# Bundle the downloaded Vosk model folder into the app
 datas = [
     ("vosk-model-small-en-us-0.15", "model"),
 ]
