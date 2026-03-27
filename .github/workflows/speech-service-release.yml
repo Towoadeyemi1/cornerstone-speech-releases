@@ -97,7 +97,7 @@ jobs:
             --collect-submodules websockets \
             --collect-submodules sounddevice \
             --osx-bundle-identifier "com.cornerstone.speechservice" \
-            server.py
+            server.spec
 
       - name: Create DMG
         working-directory: speech-service/service/dist
