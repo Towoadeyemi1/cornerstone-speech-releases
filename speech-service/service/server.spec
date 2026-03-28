@@ -14,7 +14,7 @@ hiddenimports = (
 vosk_dir = Path(vosk.__file__).resolve().parent
 
 if platform.system() == "Darwin":
-    lib_name = "libvosk.dylib"
+    lib_name = "libvosk.dyld"       # <-- was libvosk.dylib, actual file is .dyld
 elif platform.system() == "Windows":
     lib_name = "libvosk.dll"
 else:
