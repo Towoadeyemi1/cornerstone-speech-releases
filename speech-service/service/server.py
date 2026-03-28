@@ -22,10 +22,8 @@ SAMPLE_RATE = 16000
 
 # Detect if running as a PyInstaller bundle
 if getattr(sys, "frozen", False):
-    # Running as bundled app — model is in _internal/model
     _BASE_DIR = Path(sys._MEIPASS)
 else:
-    # Running as plain Python script
     _BASE_DIR = Path(__file__).parent
 
 MODEL_PATH = os.environ.get("VOSK_MODEL_PATH", str(_BASE_DIR / "model"))
@@ -41,7 +39,6 @@ def load_model():
 
     model_dir = Path(MODEL_PATH)
     if not model_dir.exists():
-        # Try common locations relative to bundle or script
         for path in [
             _BASE_DIR / "model",
             _BASE_DIR / "vosk-model-small-en-us-0.15",
@@ -74,7 +71,14 @@ async def handle_client(websocket, path):
     client_id = id(websocket)
     recognizer = None
 
-    print(f"Client {client_id} connected from {websocket.remote_address}")
+    print(f"Client {client_id} connected from {websocket.remote_address} path={path}")
+
+    # Immediately tell the client the service is alive
+    await websocket.send(json.dumps({
+        "type": "ready",
+        "engine": "vosk",
+        "sampleRate": SAMPLE_RATE
+    }))
 
     try:
         async for message in websocket:
@@ -83,7 +87,7 @@ async def handle_client(websocket, path):
                 msg_type = data.get("type")
 
                 if msg_type == "hello":
-                    # Initialize recognizer for this client
+                    # Re-confirm ready with requested sample rate
                     sample_rate = data.get("sample_rate", SAMPLE_RATE)
                     recognizer = KaldiRecognizer(model, sample_rate)
                     recognizers[client_id] = recognizer
@@ -96,13 +100,11 @@ async def handle_client(websocket, path):
                     print(f"Client {client_id} initialized with sample rate {sample_rate}")
 
                 elif msg_type == "audio" and recognizer:
-                    # Decode and process audio
                     pcm16_b64 = data.get("pcm16_b64", "")
                     try:
                         audio_bytes = base64.b64decode(pcm16_b64)
 
                         if recognizer.AcceptWaveform(audio_bytes):
-                            # Final result
                             result = json.loads(recognizer.Result())
                             text = result.get("text", "").strip()
                             if text:
@@ -111,7 +113,6 @@ async def handle_client(websocket, path):
                                     "text": text
                                 }))
                         else:
-                            # Partial result
                             partial = json.loads(recognizer.PartialResult())
                             text = partial.get("partial", "").strip()
                             if text:
@@ -149,7 +150,7 @@ async def main():
         process_request=health_handler
     ):
         print("Server ready. Press Ctrl+C to stop.")
-        await asyncio.Future()  # Run forever
+        await asyncio.Future()
 
 
 if __name__ == "__main__":
