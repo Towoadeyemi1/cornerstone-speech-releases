@@ -83,6 +83,16 @@ jobs:
           unzip -o model.zip
           rm model.zip
 
+      - name: Find libvosk.dylib location
+        run: |
+          echo "=== vosk package location ==="
+          python -c "import vosk; print(vosk.__file__)"
+          echo "=== searching for libvosk.dylib ==="
+          find /Library/Frameworks/Python.framework -name "libvosk*" 2>/dev/null || true
+          find /usr/local -name "libvosk*" 2>/dev/null || true
+          find $HOME -name "libvosk*" 2>/dev/null || true
+          find /opt -name "libvosk*" 2>/dev/null || true
+
       - name: Build application from spec
         working-directory: speech-service/service
         run: |
