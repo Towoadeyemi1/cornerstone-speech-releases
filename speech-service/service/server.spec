@@ -1,8 +1,9 @@
 # -*- mode: python ; coding: utf-8 -*-
 
-from PyInstaller.utils.hooks import collect_dynamic_libs, collect_submodules
-
-block_cipher = None
+import platform
+from pathlib import Path
+import vosk
+from PyInstaller.utils.hooks import collect_submodules
 
 hiddenimports = (
     collect_submodules("vosk")
@@ -10,12 +11,22 @@ hiddenimports = (
     + collect_submodules("sounddevice")
 )
 
-# Put libvosk.dylib under _internal/vosk/
-binaries = collect_dynamic_libs("vosk", destdir="vosk")
+vosk_dir = Path(vosk.__file__).resolve().parent
 
-datas = [
-    ("vosk-model-small-en-us-0.15", "model"),
-]
+if platform.system() == "Darwin":
+    lib_name = "libvosk.dylib"
+elif platform.system() == "Windows":
+    lib_name = "libvosk.dll"
+else:
+    lib_name = "libvosk.so"
+
+lib_path = vosk_dir / lib_name
+if not lib_path.exists():
+    raise FileNotFoundError(f"Vosk native library not found: {lib_path}")
+
+binaries = [(str(lib_path), "vosk")]
+
+datas = [("vosk-model-small-en-us-0.15", "model")]
 
 a = Analysis(
     ["server.py"],
@@ -27,10 +38,9 @@ a = Analysis(
     hooksconfig={},
     runtime_hooks=[],
     excludes=[],
-    cipher=block_cipher,
 )
 
-pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
+pyz = PYZ(a.pure)
 
 exe = EXE(
     pyz,
@@ -41,7 +51,7 @@ exe = EXE(
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
-    upx=True,
+    upx=False,
     console=False,
 )
 
@@ -51,6 +61,6 @@ coll = COLLECT(
     a.zipfiles,
     a.datas,
     strip=False,
-    upx=True,
+    upx=False,
     name="CornerstoneSpeechService",
 )
