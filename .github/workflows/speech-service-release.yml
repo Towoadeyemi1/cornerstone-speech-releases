@@ -105,10 +105,18 @@ jobs:
           ls -la CornerstoneSpeechService/_internal/vosk || true
           test -f CornerstoneSpeechService/_internal/vosk/libvosk.dyld
 
-      - name: Ad-hoc sign macOS build
+      - name: Remove quarantine attributes
         working-directory: speech-service/service/dist
         run: |
-          codesign --force --deep --sign - "CornerstoneSpeechService" || true
+          xattr -cr "CornerstoneSpeechService"
+
+      - name: Ad-hoc sign all binaries
+        working-directory: speech-service/service/dist
+        run: |
+          find CornerstoneSpeechService -type f \( -name "*.dyld" -o -name "*.dylib" -o -name "*.so" \) | while read f; do
+            codesign --force --sign - "$f" || true
+          done
+          codesign --force --deep --sign - "CornerstoneSpeechService/CornerstoneSpeechService" || true
 
       - name: Create DMG
         working-directory: speech-service/service/dist
