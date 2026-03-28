@@ -118,6 +118,12 @@ jobs:
           done
           codesign --force --deep --sign - "CornerstoneSpeechService/CornerstoneSpeechService" || true
 
+      - name: Add postinstall script to app folder
+        working-directory: speech-service/service/dist
+        run: |
+          cp $GITHUB_WORKSPACE/speech-service/installer/mac-postinstall.sh "CornerstoneSpeechService/Install Auto-Start.command"
+          chmod +x "CornerstoneSpeechService/Install Auto-Start.command"
+
       - name: Create DMG
         working-directory: speech-service/service/dist
         run: |
