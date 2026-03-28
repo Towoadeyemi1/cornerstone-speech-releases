@@ -83,11 +83,11 @@ jobs:
           unzip -o model.zip
           rm model.zip
 
-      - name: Find libvosk.dylib location
+      - name: Find libvosk location
         run: |
           echo "=== vosk package location ==="
           python -c "import vosk; print(vosk.__file__)"
-          echo "=== searching for libvosk.dylib ==="
+          echo "=== searching for libvosk ==="
           find /Library/Frameworks/Python.framework -name "libvosk*" 2>/dev/null || true
           find /usr/local -name "libvosk*" 2>/dev/null || true
           find $HOME -name "libvosk*" 2>/dev/null || true
@@ -98,12 +98,12 @@ jobs:
         run: |
           pyinstaller server.spec
 
-      - name: Verify libvosk.dylib is bundled
+      - name: Verify libvosk.dyld is bundled
         working-directory: speech-service/service/dist
         run: |
           echo "=== _internal/vosk ==="
           ls -la CornerstoneSpeechService/_internal/vosk || true
-          test -f CornerstoneSpeechService/_internal/vosk/libvosk.dylib
+          test -f CornerstoneSpeechService/_internal/vosk/libvosk.dyld
 
       - name: Ad-hoc sign macOS build
         working-directory: speech-service/service/dist
