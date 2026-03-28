@@ -88,42 +88,32 @@ jobs:
         run: |
           pyinstaller server.spec
 
-      - name: List build output
+      - name: Verify libvosk.dylib is bundled
         working-directory: speech-service/service/dist
         run: |
-          ls -la
-          ls -la CornerstoneSpeechService || true
-          ls -la CornerstoneSpeechService/_internal || true
+          echo "=== _internal/vosk ==="
           ls -la CornerstoneSpeechService/_internal/vosk || true
+          test -f CornerstoneSpeechService/_internal/vosk/libvosk.dylib
 
       - name: Ad-hoc sign macOS build
         working-directory: speech-service/service/dist
         run: |
           codesign --force --deep --sign - "CornerstoneSpeechService" || true
 
-      - name: Prepare DMG contents
-        working-directory: speech-service/service/dist
-        run: |
-          rm -rf dmg-root
-          mkdir -p dmg-root/CornerstoneSpeechService
-          cp -R CornerstoneSpeechService/_internal dmg-root/CornerstoneSpeechService/
-          cp -R CornerstoneSpeechService/CornerstoneSpeechService dmg-root/CornerstoneSpeechService/
-          if [ -d "CornerstoneSpeechService/_CodeSignature" ]; then
-            cp -R CornerstoneSpeechService/_CodeSignature dmg-root/CornerstoneSpeechService/
-          fi
-
       - name: Create DMG
         working-directory: speech-service/service/dist
         run: |
           hdiutil create -volname "CornerstoneSpeechService" \
-            -srcfolder "dmg-root" \
+            -srcfolder "CornerstoneSpeechService" \
             -ov -format UDZO \
             "CornerstoneSpeechService.dmg"
 
       - name: Create macOS zip
         working-directory: speech-service/service/dist
         run: |
-          ditto -c -k --sequesterRsrc --keepParent "CornerstoneSpeechService" "CornerstoneSpeechService-macOS.zip"
+          ditto -c -k --sequesterRsrc --keepParent \
+            "CornerstoneSpeechService" \
+            "CornerstoneSpeechService-macOS.zip"
 
       - name: Upload macOS artifact
         uses: actions/upload-artifact@v6
