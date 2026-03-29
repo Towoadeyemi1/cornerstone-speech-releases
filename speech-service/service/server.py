@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Cornerstone Speech Service - Local Vosk-based speech-to-text server
-Binds to ws://127.0.0.1:8765 for local-only access
+Binds to wss://0.0.0.0:8765 with self-signed SSL for local-only access
 """
 
 import asyncio
@@ -9,7 +9,10 @@ import json
 import base64
 import os
 import sys
+import ssl
+import tempfile
 from pathlib import Path
+from datetime import datetime, timezone, timedelta
 
 import numpy as np
 import websockets
@@ -33,8 +36,76 @@ model = None
 recognizers = {}
 
 
+def generate_self_signed_cert():
+    """Generate a self-signed certificate for wss:// support"""
+    from cryptography import x509
+    from cryptography.x509.oid import NameOID
+    from cryptography.hazmat.primitives import hashes, serialization
+    from cryptography.hazmat.primitives.asymmetric import rsa
+
+    # Generate private key
+    key = rsa.generate_private_key(
+        public_exponent=65537,
+        key_size=2048,
+    )
+
+    # Generate certificate
+    subject = issuer = x509.Name([
+        x509.NameAttribute(NameOID.COMMON_NAME, u"localhost"),
+        x509.NameAttribute(NameOID.ORGANIZATION_NAME, u"Cornerstone Church"),
+    ])
+
+    cert = (
+        x509.CertificateBuilder()
+        .subject_name(subject)
+        .issuer_name(issuer)
+        .public_key(key.public_key())
+        .serial_number(x509.random_serial_number())
+        .not_valid_before(datetime.now(timezone.utc))
+        .not_valid_after(datetime.now(timezone.utc) + timedelta(days=3650))
+        .add_extension(
+            x509.SubjectAlternativeName([
+                x509.DNSName(u"localhost"),
+                x509.IPAddress(__import__("ipaddress").IPv4Address("127.0.0.1")),
+                x509.IPAddress(__import__("ipaddress").IPv4Address("0.0.0.0")),
+            ]),
+            critical=False,
+        )
+        .sign(key, hashes.SHA256())
+    )
+
+    # Save to temp files that persist for the session
+    cert_dir = Path(tempfile.gettempdir()) / "cornerstone-speech"
+    cert_dir.mkdir(exist_ok=True)
+
+    cert_path = cert_dir / "cert.pem"
+    key_path = cert_dir / "key.pem"
+
+    cert_path.write_bytes(
+        cert.public_bytes(serialization.Encoding.PEM)
+    )
+    key_path.write_bytes(
+        key.private_bytes(
+            serialization.Encoding.PEM,
+            serialization.PrivateFormat.TraditionalOpenSSL,
+            serialization.NoEncryption(),
+        )
+    )
+
+    print(f"SSL certificate generated at {cert_path}")
+    return str(cert_path), str(key_path)
+
+
+def create_ssl_context():
+    """Create SSL context with self-signed certificate"""
+    cert_path, key_path = generate_self_signed_cert()
+    ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+    ssl_context.load_cert_chain(cert_path, key_path)
+    return ssl_context
+
+
 def load_model():
-    """Load Vosk model from local path or download if needed"""
+    """Load Vosk model from local path"""
     global model
 
     model_dir = Path(MODEL_PATH)
@@ -87,7 +158,6 @@ async def handle_client(websocket, path):
                 msg_type = data.get("type")
 
                 if msg_type == "hello":
-                    # Re-confirm ready with requested sample rate
                     sample_rate = data.get("sample_rate", SAMPLE_RATE)
                     recognizer = KaldiRecognizer(model, sample_rate)
                     recognizers[client_id] = recognizer
@@ -141,12 +211,18 @@ async def main():
     """Start the WebSocket server"""
     load_model()
 
-    print(f"Starting Cornerstone Speech Service on ws://{HOST}:{PORT}")
+    ssl_context = create_ssl_context()
+
+    print(f"Starting Cornerstone Speech Service on wss://{HOST}:{PORT}")
+    print(f"Connect from same machine: wss://127.0.0.1:{PORT}")
+    print(f"Connect from iPad/other devices: wss://<this-mac-ip>:{PORT}")
+    print(f"NOTE: Browser will show a certificate warning — click Advanced → Accept once")
 
     async with websockets.serve(
         handle_client,
         HOST,
         PORT,
+        ssl=ssl_context,
         process_request=health_handler
     ):
         print("Server ready. Press Ctrl+C to stop.")
