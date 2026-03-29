@@ -231,8 +231,3 @@ if __name__ == "__main__":
         asyncio.run(main())
     except KeyboardInterrupt:
         print("\nShutting down...")
-```
-
-After committing all three files, trigger a new build with tag `speech-v0.2.8`. Then send this message to Lovable:
-```
-The local speech service now runs on wss:// instead of ws://. Update the default Local Service URL in Speech Settings from ws://127.0.0.1:8765 to wss://127.0.0.1:8765. Also update any hardcoded ws:// references to wss:// in the speech provider code.
