@@ -10,6 +10,7 @@ import base64
 import os
 import sys
 import ssl
+import ipaddress
 import tempfile
 from pathlib import Path
 from datetime import datetime, timezone, timedelta
@@ -43,13 +44,11 @@ def generate_self_signed_cert():
     from cryptography.hazmat.primitives import hashes, serialization
     from cryptography.hazmat.primitives.asymmetric import rsa
 
-    # Generate private key
     key = rsa.generate_private_key(
         public_exponent=65537,
         key_size=2048,
     )
 
-    # Generate certificate
     subject = issuer = x509.Name([
         x509.NameAttribute(NameOID.COMMON_NAME, u"localhost"),
         x509.NameAttribute(NameOID.ORGANIZATION_NAME, u"Cornerstone Church"),
@@ -66,15 +65,13 @@ def generate_self_signed_cert():
         .add_extension(
             x509.SubjectAlternativeName([
                 x509.DNSName(u"localhost"),
-                x509.IPAddress(__import__("ipaddress").IPv4Address("127.0.0.1")),
-                x509.IPAddress(__import__("ipaddress").IPv4Address("0.0.0.0")),
+                x509.IPAddress(ipaddress.IPv4Address("127.0.0.1")),
             ]),
             critical=False,
         )
         .sign(key, hashes.SHA256())
     )
 
-    # Save to temp files that persist for the session
     cert_dir = Path(tempfile.gettempdir()) / "cornerstone-speech"
     cert_dir.mkdir(exist_ok=True)
 
@@ -120,8 +117,9 @@ def load_model():
                 model_dir = path
                 break
         else:
-            print("ERROR: No Vosk model found. Download from https://alphacephei.com/vosk/models")
-            print("Place in ./model directory or set VOSK_MODEL_PATH environment variable")
+            print("ERROR: No Vosk model found.")
+            print("Download from https://alphacephei.com/vosk/models")
+            print("Place in ./model directory or set VOSK_MODEL_PATH")
             sys.exit(1)
 
     print(f"Loading Vosk model from {model_dir}...")
@@ -144,7 +142,6 @@ async def handle_client(websocket, path):
 
     print(f"Client {client_id} connected from {websocket.remote_address} path={path}")
 
-    # Immediately tell the client the service is alive
     await websocket.send(json.dumps({
         "type": "ready",
         "engine": "vosk",
@@ -216,7 +213,7 @@ async def main():
     print(f"Starting Cornerstone Speech Service on wss://{HOST}:{PORT}")
     print(f"Connect from same machine: wss://127.0.0.1:{PORT}")
     print(f"Connect from iPad/other devices: wss://<this-mac-ip>:{PORT}")
-    print(f"NOTE: Browser will show a certificate warning — click Advanced → Accept once")
+    print(f"NOTE: Visit https://127.0.0.1:8765/health in browser once to trust the certificate")
 
     async with websockets.serve(
         handle_client,
@@ -234,3 +231,8 @@ if __name__ == "__main__":
         asyncio.run(main())
     except KeyboardInterrupt:
         print("\nShutting down...")
+```
+
+After committing all three files, trigger a new build with tag `speech-v0.2.8`. Then send this message to Lovable:
+```
+The local speech service now runs on wss:// instead of ws://. Update the default Local Service URL in Speech Settings from ws://127.0.0.1:8765 to wss://127.0.0.1:8765. Also update any hardcoded ws:// references to wss:// in the speech provider code.
