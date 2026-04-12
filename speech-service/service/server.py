@@ -10,10 +10,33 @@ import base64
 import os
 import sys
 import ssl
-import ipaddress
+import ctypes
 import tempfile
+import platform
 from pathlib import Path
 from datetime import datetime, timezone, timedelta
+
+# Pre-load the native Vosk library before importing the Python bindings.
+# In a PyInstaller frozen build the dynamic linker cannot find libvosk on its
+# own because the bundle's _internal/vosk subfolder is not on PATH/LD_LIBRARY_PATH.
+# Loading it explicitly here fixes the generic "Failed to create a model" crash.
+if getattr(sys, "frozen", False):
+    _FROZEN_DIR = Path(sys._MEIPASS)
+    _lib_names = {
+        "Windows": "vosk/libvosk.dll",
+        "Darwin":  "vosk/libvosk.dylib",
+        "Linux":   "vosk/libvosk.so",
+    }
+    _lib_rel = _lib_names.get(platform.system())
+    if _lib_rel:
+        _lib_path = _FROZEN_DIR / _lib_rel
+        if _lib_path.exists():
+            try:
+                ctypes.CDLL(str(_lib_path))
+            except OSError as _e:
+                print(f"WARNING: Could not pre-load {_lib_path}: {_e}")
+        else:
+            print(f"WARNING: Native Vosk library not found at {_lib_path}")
 
 import numpy as np
 import websockets
@@ -44,11 +67,13 @@ def generate_self_signed_cert():
     from cryptography.hazmat.primitives import hashes, serialization
     from cryptography.hazmat.primitives.asymmetric import rsa
 
+    # Generate private key
     key = rsa.generate_private_key(
         public_exponent=65537,
         key_size=2048,
     )
 
+    # Generate certificate
     subject = issuer = x509.Name([
         x509.NameAttribute(NameOID.COMMON_NAME, u"localhost"),
         x509.NameAttribute(NameOID.ORGANIZATION_NAME, u"Cornerstone Church"),
@@ -65,13 +90,15 @@ def generate_self_signed_cert():
         .add_extension(
             x509.SubjectAlternativeName([
                 x509.DNSName(u"localhost"),
-                x509.IPAddress(ipaddress.IPv4Address("127.0.0.1")),
+                x509.IPAddress(__import__("ipaddress").IPv4Address("127.0.0.1")),
+                x509.IPAddress(__import__("ipaddress").IPv4Address("0.0.0.0")),
             ]),
             critical=False,
         )
         .sign(key, hashes.SHA256())
     )
 
+    # Save to temp files that persist for the session
     cert_dir = Path(tempfile.gettempdir()) / "cornerstone-speech"
     cert_dir.mkdir(exist_ok=True)
 
@@ -117,9 +144,8 @@ def load_model():
                 model_dir = path
                 break
         else:
-            print("ERROR: No Vosk model found.")
-            print("Download from https://alphacephei.com/vosk/models")
-            print("Place in ./model directory or set VOSK_MODEL_PATH")
+            print("ERROR: No Vosk model found. Download from https://alphacephei.com/vosk/models")
+            print("Place in ./model directory or set VOSK_MODEL_PATH environment variable")
             sys.exit(1)
 
     print(f"Loading Vosk model from {model_dir}...")
@@ -142,6 +168,7 @@ async def handle_client(websocket, path):
 
     print(f"Client {client_id} connected from {websocket.remote_address} path={path}")
 
+    # Immediately tell the client the service is alive
     await websocket.send(json.dumps({
         "type": "ready",
         "engine": "vosk",
@@ -213,7 +240,7 @@ async def main():
     print(f"Starting Cornerstone Speech Service on wss://{HOST}:{PORT}")
     print(f"Connect from same machine: wss://127.0.0.1:{PORT}")
     print(f"Connect from iPad/other devices: wss://<this-mac-ip>:{PORT}")
-    print(f"NOTE: Visit https://127.0.0.1:8765/health in browser once to trust the certificate")
+    print(f"NOTE: Browser will show a certificate warning — click Advanced → Accept once")
 
     async with websockets.serve(
         handle_client,
