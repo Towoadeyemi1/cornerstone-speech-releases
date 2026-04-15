@@ -15,6 +15,7 @@ import sys
 import ctypes
 import platform
 from pathlib import Path
+from http import HTTPStatus
 
 # Pre-load the native Vosk library before importing the Python bindings.
 # In a PyInstaller frozen build the dynamic linker cannot find libvosk on its
@@ -88,8 +89,8 @@ def load_model():
 async def health_handler(path, request_headers):
     """Handle HTTP health check requests"""
     if path == "/health":
-        return (200, [("Content-Type", "application/json")],
-                json.dumps({"ok": True, "engines": ["vosk"], "active": "vosk"}).encode())
+        body = json.dumps({"ok": True, "engines": ["vosk"], "active": "vosk"}).encode()
+        return (HTTPStatus.OK, [("Content-Type","application/json"),("Content-Length",str(len(body))),("Access-Control-Allow-Origin","*")], body)
     return None
 
 
